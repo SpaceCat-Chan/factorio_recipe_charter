@@ -1,4 +1,5 @@
-local Recipe_List = require(arg[1])
+---@type table<string, Recipe>
+local Recipe_List = require(string.gsub(arg[1], "%.lua$", ""))
 ---@type string
 local OutputFilename = arg[2];
 
@@ -9,12 +10,146 @@ local function Append(value)
 	OutputResult = OutputResult..tostring(value)
 end
 
+---@class Recipe
+---@field public name string
+local AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA______________________________________AAAAAAAAAAAAAAAAAAA
+
+---@type table<string, Recipe>
 local RecipeListToOutput = {}
+---@type table<string, boolean>
 local ItemsToOutput = {}
+---@type table<string, table<integer, boolean>>
+local AlreadyAppearedItems = {}
+---@type table<string, boolean>
 local RecipeToIgnore = {}
+---@type table<string, boolean>
 local ItemsToIgnore = {}
+---@type table<string, Recipe>
 local RecipeListInCMD = {}
+---@type table<string, boolean>
 local ItemsInCMD = {}
+
+function PrintRecipies(ItemName, Recipies, Detail, Selected)
+	print("\n\n")
+	print("item: "..ItemName.." has "..tostring(#Recipies).." recipes that can make it")
+		for i,Recipe in pairs(Recipies) do
+			local RecipeString = ""
+			if Selected[i] then
+				RecipeString = RecipeString.."\x1b[1;4m"
+			end
+			if RecipeListToOutput[Recipe.name] then
+				RecipeString = RecipeString.."\x1b[32m"
+			end
+			if RecipeToIgnore[Recipe.name] then
+				RecipeString = RecipeString.."\x1b[31m"
+			end
+			RecipeString = RecipeString..tostring(i).." "..Recipe.name
+			RecipeString = RecipeString.." ("..Recipe.localised_name[1]..")"
+			if RecipeListToOutput[Recipe.name] then
+				RecipeString = RecipeString.." already accepted\x1b[0m"
+			end
+			if RecipeToIgnore[Recipe.name] then
+				RecipeString = RecipeString.." already declined\x1b[0m"
+			end
+			if Selected[i] then
+				RecipeString = RecipeString.."\x1b[22m\x1b[24m"
+			end
+			print(RecipeString)
+			if Detail then
+				print("Ingredients:")
+				for j,Ingredient in pairs(Recipe.ingredients) do
+					local IngredientString = ""
+					if ItemsToOutput[Ingredient.name] then
+						IngredientString = IngredientString.."\x1b[32m"
+					end
+					IngredientString = IngredientString..tostring(i).."."..tostring(j)
+					IngredientString = IngredientString.." "..Ingredient.name
+					IngredientString = IngredientString.." ("..tostring(Ingredient.amount)..")"
+					if ItemsToOutput[Ingredient.name] then
+						IngredientString = IngredientString.." already being made by other recipe\x1b[0m"
+					end
+					print(IngredientString)
+				end
+				print("Products:")
+				for j,Product in pairs(Recipe.products) do
+					local ProductString = tostring(i).."."..tostring(j)
+					ProductString = ProductString.." "..Product.name
+					ProductString = ProductString.." ("
+					if Product.amount then
+						ProductString = ProductString..tostring(Product.amount)
+					else
+						ProductString = ProductString..tostring(Product.amount_min).."-"
+						ProductString = ProductString..tostring(Product.amount_max)
+					end
+					ProductString = ProductString..")"
+					if Recipe.main_product and Product.name == Recipe.main_product.name then
+						ProductString = ProductString.." (main product)"
+					end
+					print(ProductString)
+				end
+				print("")
+			end
+		end
+end
+
+function UserSelectRecipies(ItemName, Recipies)
+	local CurrentlySelected = {}
+	for i,_ in pairs(Recipies) do
+		CurrentlySelected[i] = false
+	end
+	local InputFinished = false
+	local DoDetailPrint = false
+	repeat
+		PrintRecipies(ItemName, Recipies, DoDetailPrint, CurrentlySelected)
+		DoDetailPrint = false
+		print("\nplease enter the number of the recipies you want to toggle selection for (comma sepperated list)\ny to approve of the current selection\nY to force current selection\ndetail or Detail to show ingredients and products")
+		local Input = io.read()
+		if Input == "detail" or Input == "Detail" then
+			DoDetailPrint = true
+		elseif Input == "y" then
+			local AnyRecipiesSelected = false
+			for _,Selected in pairs(CurrentlySelected) do
+				AnyRecipiesSelected = AnyRecipiesSelected or Selected
+			end
+			for _,Recipe in pairs(Recipies) do
+				AnyRecipiesSelected = AnyRecipiesSelected or RecipeListToOutput[Recipe.name]
+			end
+			if AnyRecipiesSelected then
+				InputFinished = true
+			else
+				print("are you sure? there are no recipies to make this item if you accept now\ntype Y to accept anyways (must be capital Y)")
+				local Accept = io.read()
+				if Accept == "Y" then
+					InputFinished = true
+				end
+			end
+		elseif Input == "Y" then
+			InputFinished = true
+		else
+			local Numbers = {}
+			local FailedGettingInput = false
+			for StringPart in string.gmatch(Input, "[^,]*") do
+				local Number = tonumber(StringPart)
+				if Number == nil then
+					print(StringPart.." is not a valid number")
+					FailedGettingInput = true
+				end
+				if Recipies[Number] == nil then
+					print(StringPart.." is outside of the allowed range")
+					FailedGettingInput = true
+				end
+				table.insert(Numbers, Number)
+			end
+			if not FailedGettingInput then
+				for _,Index in pairs(Numbers) do
+					CurrentlySelected[Index] = not CurrentlySelected[Index]
+				end
+			end
+		end
+	until InputFinished
+	return CurrentlySelected
+end
+
 
 
 function WalkDepends(RecipeName, ChoiceBased)
@@ -29,48 +164,9 @@ function WalkDepends(RecipeName, ChoiceBased)
 		return
 	end
 	RecipeListToOutput[RecipeName] = Recipe_List[RecipeName]
-	if not ChoiceBased or true then
-		for _,Item in pairs(Recipe_List[RecipeName].ingredients) do
-			WalkItemDepends(Item.name, ChoiceBased)
-		end
-	else
-		print("Recipe: "..RecipeName.." uses the following items: ")
-		for i,Ingredient in pairs(Recipe_List[RecipeName].ingredients) do
-			print(tostring(i).." "..Ingredient.name)
-		end
-		local ToUse = {}
-		local GotItRight = false
-		repeat
-			print("please enter the ones you want in binary format (001010 means number 4 and number 2)")
-			local Result = io.read()
-			if #Result ~= #(Recipe_List[RecipeName].ingredients) then
-				print("wrong length")
-			else
-				for x=1,#Result do
-					local Char = string.sub(Result, x, x)
-					if Char == "1" then
-						ToUse[x] = true
-					elseif Char == "0" then
-						ToUse[x] = false
-					else
-						print("bad char: "..Char)
-						ToUse = {}
-						break
-					end
-				end
-				GotItRight = true
-			end
-		until GotItRight
-		for i,Use in pairs(ToUse) do
-			if not Use then
-				ItemsToIgnore[Recipe_List[RecipeName].ingredients[i].name] = true
-			end
-		end
-		for i,Use in pairs(ToUse) do
-			if Use then
-				WalkItemDepends(Recipe_List[RecipeName].ingredients[i].name, ChoiceBased)
-			end
-		end
+	for _,Item in pairs(Recipe_List[RecipeName].ingredients) do
+		WalkItemDepends(Item.name, ChoiceBased)
+		ItemsToOutput[Item.name] = true
 	end
 end
 
@@ -78,6 +174,7 @@ function WalkItemDepends(ItemName, ChoiceBased)
 	if ItemsToIgnore[ItemName] then
 		return
 	end
+	---@type table<string, Recipe>
 	local FoundRecipies = {}
 	for Name,Recipe in pairs(Recipe_List) do
 		local FoundInResults = false
@@ -97,82 +194,32 @@ function WalkItemDepends(ItemName, ChoiceBased)
 	end
 	if not ChoiceBased then
 		for _,Recipe in pairs(FoundRecipies) do
-			WalkDepends(Recipe.name.Name, ChoiceBased)
+			WalkDepends(Recipe.name, ChoiceBased)
 		end
 	else
-		if ItemsToOutput[ItemName] then
+		if AlreadyAppearedItems[ItemName] then
 			return
 		end
-		table.sort(FoundRecipies, function(a,b) return a.name.Name < b.name.Name end)
+		table.sort(FoundRecipies, function(a,b) return a.name < b.name end)
+		---@type table<integer, boolean>
 		local ToUse = {}
 		if not (#FoundRecipies == 1 and FoundRecipies[1].name == ItemName) then
-			print("")
-			print("Item "..ItemName.." can be made with following recipies: ")
-			for i,Recipe in ipairs(FoundRecipies) do
-				print(tostring(i).." "..tostring(Recipe.name.Name).." ("..tostring(Recipe.name.LName[1])..")")
-			end
-			local GotItRight = false
-			repeat
-				print("please enter the ones you want in binary format (001010 means number 3 and number 5)")
-				local Result = io.read()
-				if Result == "Detail" or Result == "detail" then
-					print("")
-					print("Item "..ItemName.." can be made with following recipies: ")
-					for i,Recipe in ipairs(FoundRecipies) do
-						print("")
-						print(tostring(i).." "..tostring(Recipe.name.Name).." ("..tostring(Recipe.name.LName[1])..")")
-						print("Ingredients: ")
-						for j,Ingredient in pairs(Recipe.ingredients) do
-							local PrintString = tostring(i).."."..tostring(j)
-							PrintString = PrintString.." "..Ingredient.name
-							PrintString = PrintString.." ("..tostring(Ingredient.amount)..")"
-							print(PrintString)
-						end
-						print("Products: ")
-						for j,Product in pairs(Recipe.products) do
-							local PrintString = tostring(i).."."..tostring(j)
-							PrintString = PrintString.." "..Product.name
-							if Product.amount then
-								PrintString = PrintString.." ("..tostring(Product.amount)..")"
-							else
-								PrintString = PrintString.." ("..tostring(Product.amount_min).."-"
-								PrintString = PrintString..tostring(Product.amount_max)..")"
-							end
-							if Recipe.main_product and Product.name == Recipe.main_product.name then
-								PrintString = PrintString.." (main product)"
-							end
-							print(PrintString)
-						end
-					end
-				elseif #Result ~= #FoundRecipies then
-					print("wrong length")
-				else
-					for x=1,#Result do
-						local Char = string.sub(Result, x, x)
-						if Char == "1" then
-							ToUse[x] = true
-						elseif Char == "0" then
-							ToUse[x] = false
-						else
-							print("bad char: "..Char)
-							ToUse = {}
-						end
-					end
-					GotItRight = true
-				end
-			until GotItRight
+			ToUse = UserSelectRecipies(ItemName, FoundRecipies)
 		else
 			ToUse = {true}
 		end
-		ItemsToOutput[ItemName] = ToUse
+		AlreadyAppearedItems[ItemName] = ToUse
 		for i,Use in pairs(ToUse) do
 			if not Use then
-				RecipeToIgnore[FoundRecipies[i].name] = true
+				if RecipeListToOutput[FoundRecipies[i].name] == nil then
+					RecipeToIgnore[FoundRecipies[i].name] = true
+				end
 			end
 		end
 		for i,Use in pairs(ToUse) do
 			if Use then
-				WalkDepends(FoundRecipies[i].name.Name, ChoiceBased)
+				RecipeToIgnore[FoundRecipies[i].name] = nil
+				WalkDepends(FoundRecipies[i].name, ChoiceBased)
 			end
 		end
 	end

@@ -5,7 +5,7 @@ for Name,Recipe in pairs(game.recipe_prototypes) do
 	Recipe_List[Name].ingredients = Recipe.ingredients
 	Recipe_List[Name].products = Recipe.products
 	Recipe_List[Name].main_product = Recipe.main_product
-	Recipe_List[Name].name = Recipe.name
+	Recipe_List[Name].name = {Name = Recipe.name, LName = Recipe.localised_name}
 end
 
 local player

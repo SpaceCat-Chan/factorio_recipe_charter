@@ -97,25 +97,54 @@ function WalkItemDepends(ItemName, ChoiceBased)
 	end
 	if not ChoiceBased then
 		for _,Recipe in pairs(FoundRecipies) do
-			WalkDepends(Recipe.name, ChoiceBased)
+			WalkDepends(Recipe.name.Name, ChoiceBased)
 		end
 	else
 		if ItemsToOutput[ItemName] then
 			return
 		end
-		table.sort(FoundRecipies, function(a,b) return a.name < b.name end)
+		table.sort(FoundRecipies, function(a,b) return a.name.Name < b.name.Name end)
 		local ToUse = {}
 		if not (#FoundRecipies == 1 and FoundRecipies[1].name == ItemName) then
 			print("")
 			print("Item "..ItemName.." can be made with following recipies: ")
 			for i,Recipe in ipairs(FoundRecipies) do
-				print(tostring(i).." "..tostring(Recipe.name))
+				print(tostring(i).." "..tostring(Recipe.name.Name).." ("..tostring(Recipe.name.LName[1])..")")
 			end
 			local GotItRight = false
 			repeat
 				print("please enter the ones you want in binary format (001010 means number 3 and number 5)")
 				local Result = io.read()
-				if #Result ~= #FoundRecipies then
+				if Result == "Detail" or Result == "detail" then
+					print("")
+					print("Item "..ItemName.." can be made with following recipies: ")
+					for i,Recipe in ipairs(FoundRecipies) do
+						print("")
+						print(tostring(i).." "..tostring(Recipe.name.Name).." ("..tostring(Recipe.name.LName[1])..")")
+						print("Ingredients: ")
+						for j,Ingredient in pairs(Recipe.ingredients) do
+							local PrintString = tostring(i).."."..tostring(j)
+							PrintString = PrintString.." "..Ingredient.name
+							PrintString = PrintString.." ("..tostring(Ingredient.amount)..")"
+							print(PrintString)
+						end
+						print("Products: ")
+						for j,Product in pairs(Recipe.products) do
+							local PrintString = tostring(i).."."..tostring(j)
+							PrintString = PrintString.." "..Product.name
+							if Product.amount then
+								PrintString = PrintString.." ("..tostring(Product.amount)..")"
+							else
+								PrintString = PrintString.." ("..tostring(Product.amount_min).."-"
+								PrintString = PrintString..tostring(Product.amount_max)..")"
+							end
+							if Recipe.main_product and Product.name == Recipe.main_product.name then
+								PrintString = PrintString.." (main product)"
+							end
+							print(PrintString)
+						end
+					end
+				elseif #Result ~= #FoundRecipies then
 					print("wrong length")
 				else
 					for x=1,#Result do
@@ -127,7 +156,6 @@ function WalkItemDepends(ItemName, ChoiceBased)
 						else
 							print("bad char: "..Char)
 							ToUse = {}
-							break
 						end
 					end
 					GotItRight = true
@@ -144,7 +172,7 @@ function WalkItemDepends(ItemName, ChoiceBased)
 		end
 		for i,Use in pairs(ToUse) do
 			if Use then
-				WalkDepends(FoundRecipies[i].name, ChoiceBased)
+				WalkDepends(FoundRecipies[i].name.Name, ChoiceBased)
 			end
 		end
 	end
